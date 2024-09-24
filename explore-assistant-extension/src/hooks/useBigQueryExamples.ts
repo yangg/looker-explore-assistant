@@ -27,23 +27,41 @@ export const useBigQueryExamples = () => {
 
   const { core40SDK } = useContext(ExtensionContext)
 
+  let querying
   const runSQLQuery = async (sql: string) => {
+    const key = sql.match(/\.explore_assistant_(\w+)/)[1]
+    if(querying) {
+      return new Promise((resolve) => {
+        querying.push({resolve, key})
+      })
+    }
     try {
-      const createSqlQuery = await core40SDK.ok(
-        core40SDK.create_sql_query({
-          connection_name: connectionName,
-          sql: sql,
-        }),
-        )
-        const { slug } = await createSqlQuery
-        if (slug) {
-          const runSQLQuery = await core40SDK.ok(
-            core40SDK.run_sql_query(slug, 'json'),
-            )
-            const examples = await runSQLQuery
-            return examples
-          }
-          return []
+      querying = []
+      const res = await fetch(`${process.env.BI_API || 'http://localhost:6002'}/looker/query`)
+      if(!res.ok) {
+        throw new Error('Query Example Error')
+      }
+      const data = await res.json()
+      querying.forEach((req) => {
+        req.resolve(data[req.key])
+      })
+      querying = null
+      return data[key]
+    //   const createSqlQuery = await core40SDK.ok(
+    //     core40SDK.create_sql_query({
+    //       connection_name: connectionName,
+    //       sql: sql,
+    //     }),
+    //     )
+    //     const { slug } = await createSqlQuery
+    //     if (slug) {
+    //       const runSQLQuery = await core40SDK.ok(
+    //         core40SDK.run_sql_query(slug, 'json'),
+    //         )
+    //         const examples = await runSQLQuery
+    //         return examples
+    //       }
+    //       return []
     } catch(error) {
       showBoundary(error)
       throw new Error('error')
